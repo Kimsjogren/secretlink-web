@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://rtmpmcorjhcdmcewddpp.supabase.co; base-uri 'none'; form-action 'none'">
+  <title>SecretLink</title>
+  <style>
+    :root { color-scheme:light dark; --ink:#14201d; --muted:#60706b; --paper:#f4f7f5; --surface:#fff; --accent:#08665f; --accent-hover:#064f4a; --line:#c8d5d1; --danger:#a23636; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:24px; color:var(--ink); background:radial-gradient(circle at 20% 15%,#dcebe5 0 1px,transparent 2px) 0 0/22px 22px,linear-gradient(145deg,#edf4f1,#dce8e3); font-family:"Avenir Next","Trebuchet MS",sans-serif; }
+    main { width:min(620px,100%); padding:clamp(28px,7vw,58px); background:var(--surface); border:1px solid var(--line); border-radius:8px; box-shadow:0 24px 70px rgba(20,32,29,.13); }
+    header { display:flex; align-items:center; gap:14px; margin-bottom:38px; }
+    .mark { width:42px; height:42px; display:grid; place-items:center; flex:0 0 auto; border:2px solid var(--accent); color:var(--accent); border-radius:50%; font:700 19px Georgia,serif; }
+    h1 { margin:0; font:700 clamp(30px,7vw,48px) Georgia,serif; letter-spacing:0; }
+    h2 { font-size:clamp(20px,5vw,26px); letter-spacing:0; }
+    p { color:var(--muted); line-height:1.65; }
+    button { width:100%; min-height:48px; margin-top:18px; border:0; border-radius:8px; color:#fff; background:var(--accent); font:700 15px inherit; cursor:pointer; }
+    button:hover { background:var(--accent-hover); }
+    button:disabled { cursor:wait; opacity:.7; }
+    pre { display:none; min-height:92px; margin:22px 0 0; padding:18px; overflow-wrap:anywhere; white-space:pre-wrap; color:var(--ink); background:var(--paper); border:1px solid var(--line); border-radius:6px; font:16px/1.55 "SFMono-Regular",Consolas,monospace; }
+    .error { color:var(--danger); }
+    @media (prefers-color-scheme:dark) { :root { --ink:#edf5f2; --muted:#a8b6b2; --paper:#161c1a; --surface:#1c2321; --line:#394743; } body { background:radial-gradient(circle at 20% 15%,#33423d 0 1px,transparent 2px) 0 0/22px 22px,linear-gradient(145deg,#111614,#202b27); } }
+  </style>
+</head>
+<body>
+  <main>
+    <header><span class="mark" aria-hidden="true">S</span><h1>SecretLink</h1></header>
+    <section id="ready">
+      <h2 id="heading">A secret was shared with you</h2>
+      <p id="intro">Reveal it only when you are ready. This action uses one available view.</p>
+      <button id="reveal" type="button">Reveal secret</button>
+    </section>
+    <pre id="secret" tabindex="0"></pre>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    const endpoint = 'https://rtmpmcorjhcdmcewddpp.supabase.co/functions/v1/secret-link';
+    const translations = {
+      en: { heading:'A secret was shared with you', intro:'Reveal it only when you are ready. This action uses one available view.', reveal:'Reveal secret', incomplete:'This link is incomplete.', opening:'Opening securely...', unavailable:'This secret is unavailable or has expired.', opened:'Secret revealed. Close this page when finished.', failed:'The secret could not be opened.' },
+      sv: { heading:'En hemlighet har delats med dig', intro:'Visa den först när du är redo. Det här använder en tillgänglig visning.', reveal:'Visa hemligheten', incomplete:'Länken är ofullständig.', opening:'Öppnar säkert...', unavailable:'Hemligheten är inte tillgänglig eller har gått ut.', opened:'Hemligheten visas. Stäng sidan när du är klar.', failed:'Hemligheten kunde inte öppnas.' },
+      de: { heading:'Ein Geheimnis wurde mit dir geteilt', intro:'Zeige es erst, wenn du bereit bist. Dadurch wird ein verfügbarer Aufruf verwendet.', reveal:'Geheimnis anzeigen', incomplete:'Dieser Link ist unvollständig.', opening:'Wird sicher geöffnet...', unavailable:'Dieses Geheimnis ist nicht verfügbar oder abgelaufen.', opened:'Geheimnis angezeigt. Schließe diese Seite anschließend.', failed:'Das Geheimnis konnte nicht geöffnet werden.' },
+      es: { heading:'Han compartido un secreto contigo', intro:'Muéstralo solo cuando estés listo. Esta acción utiliza una visualización disponible.', reveal:'Mostrar secreto', incomplete:'Este enlace está incompleto.', opening:'Abriendo de forma segura...', unavailable:'Este secreto no está disponible o ha caducado.', opened:'Secreto mostrado. Cierra esta página cuando termines.', failed:'No se pudo abrir el secreto.' }
+    };
+    const language = navigator.language.slice(0, 2);
+    const text = translations[language] || translations.en;
+    document.documentElement.lang = translations[language] ? language : 'en';
+
+    const decode = value => Uint8Array.from(atob(value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4)), character => character.charCodeAt(0));
+    const button = document.querySelector('#reveal');
+    const output = document.querySelector('#secret');
+    const status = document.querySelector('#status');
+    document.querySelector('#heading').textContent = text.heading;
+    document.querySelector('#intro').textContent = text.intro;
+    button.textContent = text.reveal;
+
+    button.addEventListener('click', async () => {
+      const token = new URL(location.href).searchParams.get('token');
+      const keyValue = location.hash.slice(1);
+      if (!token || !keyValue) {
+        status.textContent = text.incomplete;
+        status.className = 'error';
+        return;
+      }
+
+      button.disabled = true;
+      status.textContent = text.opening;
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type':'application/json' },
+          body: JSON.stringify({ action:'consume', token })
+        });
+        if (!response.ok) throw new Error(text.unavailable);
+        const payload = await response.json();
+        const key = await crypto.subtle.importKey('raw', decode(keyValue), 'AES-GCM', false, ['decrypt']);
+        const plaintext = await crypto.subtle.decrypt({ name:'AES-GCM', iv:decode(payload.nonce) }, key, decode(payload.ciphertext));
+        output.textContent = new TextDecoder().decode(plaintext);
+        output.style.display = 'block';
+        output.focus();
+        document.querySelector('#ready').remove();
+        status.textContent = text.opened;
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : text.failed;
+        status.className = 'error';
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
